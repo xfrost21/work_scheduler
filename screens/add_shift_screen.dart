@@ -54,7 +54,16 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
     }
   }
 
+  // ULEPSZONE: Sprawdzanie świąt państwowych + firmowych
   bool _isHoliday(DateTime day) {
+    // 1. Sprawdzamy święta zdefiniowane przez Ciebie w Opcjach
+    bool isCompanyHoliday = _settings.customHolidays.any(
+      (d) => d.year == day.year && d.month == day.month && d.day == day.day,
+    );
+
+    if (isCompanyHoliday) return true;
+
+    // 2. Stałe święta państwowe
     final fixedHolidays = [
       [1, 1],
       [6, 1],
@@ -69,6 +78,8 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
     for (var h in fixedHolidays) {
       if (day.day == h[0] && day.month == h[1]) return true;
     }
+
+    // 3. Ruchome święta (Wielkanoc i okolice)
     int y = day.year;
     int a = y % 19;
     int b = y ~/ 100;
@@ -85,10 +96,18 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
     int month = (h + l - 7 * m + 114) ~/ 31;
     int dDay = ((h + l - 7 * m + 114) % 31) + 1;
     DateTime easter = DateTime(y, month, dDay);
-    if (isSameDay(day, easter) ||
-        isSameDay(day, easter.add(const Duration(days: 1))) ||
-        isSameDay(day, easter.add(const Duration(days: 49))) ||
+
+    if (isSameDay(day, easter) || // Wielkanoc
+        isSameDay(
+          day,
+          easter.add(const Duration(days: 1)),
+        ) || // Poniedziałek Wielkanocny
+        isSameDay(
+          day,
+          easter.add(const Duration(days: 49)),
+        ) || // Zielone Świątki
         isSameDay(day, easter.add(const Duration(days: 60)))) {
+      // Boże Ciało
       return true;
     }
     return false;
@@ -143,10 +162,11 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
       }
     }
 
-    // Pobieramy stawkę z ustawień
+    // ULEPSZONE: Pobieranie bonusu świątecznego z ustawień
     double baseRate = isHolidayDay
-        ? (_settings.hourlyRate + 4.0)
+        ? (_settings.hourlyRate + _settings.holidayBonus)
         : _settings.hourlyRate;
+
     double nightRate = baseRate * 1.2;
     double payForRegular = (regularMinutes / 60.0) * baseRate;
     double payForNight = (nightMinutes / 60.0) * nightRate;
@@ -160,7 +180,10 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.existingShift != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final cardColor = Theme.of(context).cardTheme.color;
 
     return Scaffold(
       appBar: AppBar(
@@ -168,31 +191,44 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
           isEditing ? 'Edytuj wpis' : 'Nowy wpis',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        leading: IconButton(
+          icon: Icon(Icons.close, color: textColor),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // --- POPRAWIONY PRZEŁĄCZNIK TYPÓW (iOS) ---
             CupertinoSlidingSegmentedControl<String>(
               groupValue: _shiftType,
-              children: const {
-                'work': Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Praca'),
+              backgroundColor: isDark ? Colors.white10 : Colors.grey.shade300,
+              thumbColor: isDark ? Colors.grey.shade800 : Colors.white,
+              children: {
+                'work': _buildSegmentText(
+                  'Praca',
+                  _shiftType == 'work',
+                  textColor,
                 ),
-                'off': Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Wolne'),
+                'off': _buildSegmentText(
+                  'Wolne',
+                  _shiftType == 'off',
+                  textColor,
                 ),
-                'sick': Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('L4'),
+                'sick': _buildSegmentText(
+                  'L4',
+                  _shiftType == 'sick',
+                  textColor,
                 ),
               },
               onValueChanged: (val) => setState(() => _shiftType = val!),
             ),
+
             const SizedBox(height: 24),
+
+            // --- KALENDARZ ---
             _buildIosCard(
               child: TableCalendar(
                 locale: 'pl_PL',
@@ -205,23 +241,67 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                   _focusedDay = f;
                 }),
                 holidayPredicate: _isHoliday,
-                headerStyle: const HeaderStyle(
+                calendarStyle: CalendarStyle(
+                  defaultTextStyle: TextStyle(color: textColor),
+                  weekendTextStyle: const TextStyle(color: Colors.redAccent),
+                  holidayTextStyle: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  selectedDecoration: BoxDecoration(
+                    color: primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  todayDecoration: BoxDecoration(
+                    border: Border.all(color: primaryColor),
+                    shape: BoxShape.circle,
+                  ),
+                  outsideTextStyle: const TextStyle(color: Colors.grey),
+                ),
+                headerStyle: HeaderStyle(
                   formatButtonVisible: false,
                   titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                  ),
+                  leftChevronIcon: Icon(
+                    Icons.chevron_left,
+                    color: primaryColor,
+                  ),
+                  rightChevronIcon: Icon(
+                    Icons.chevron_right,
+                    color: primaryColor,
+                  ),
+                ),
+                daysOfWeekStyle: DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  weekendStyle: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 startingDayOfWeek: StartingDayOfWeek.monday,
               ),
             ),
+
             const SizedBox(height: 24),
+
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               child: _shiftType == 'work'
-                  ? _buildWorkSection()
+                  ? _buildWorkSection(textColor, primaryColor)
                   : _shiftType == 'sick'
                   ? _buildSickSection()
                   : const SizedBox.shrink(),
             ),
+
             const SizedBox(height: 32),
+
             ElevatedButton(
               onPressed: _handleSave,
               style: ElevatedButton.styleFrom(
@@ -232,7 +312,10 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: Text(isEditing ? 'ZAPISZ ZMIANY' : 'DODAJ DO GRAFIKU'),
+              child: Text(
+                isEditing ? 'ZAPISZ ZMIANY' : 'DODAJ DO GRAFIKU',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -240,7 +323,20 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
     );
   }
 
-  Widget _buildWorkSection() {
+  Widget _buildSegmentText(String label, bool isSelected, Color? textColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? textColor : textColor?.withOpacity(0.6),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkSection(Color? textColor, Color primaryColor) {
     return Column(
       children: [
         Row(
@@ -249,7 +345,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
               child: _TimeButton(
                 label: 'Początek',
                 time: _startTime,
-                icon: Icons.login,
+                icon: Icons.login_rounded,
                 onTap: () => _pickTime(context, true),
               ),
             ),
@@ -258,7 +354,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
               child: _TimeButton(
                 label: 'Koniec',
                 time: _endTime,
-                icon: Icons.logout,
+                icon: Icons.logout_rounded,
                 onTap: () => _pickTime(context, false),
               ),
             ),
@@ -267,15 +363,16 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
         const SizedBox(height: 24),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardTheme.color,
             borderRadius: BorderRadius.circular(12),
           ),
           child: SwitchListTile(
-            title: const Text(
+            title: Text(
               'Zrealizowana',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
             ),
             value: _isCompleted,
+            activeColor: primaryColor,
             onChanged: (val) => setState(() => _isCompleted = val),
           ),
         ),
@@ -286,18 +383,24 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
   Widget _buildSickSection() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.05),
+        color: Colors.red.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
       ),
       child: SwitchListTile(
         title: const Text(
           'L4 Płatne 100%',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.redAccent,
+          ),
         ),
-        subtitle: const Text('Ciąża, wypadek lub dawstwo'),
+        subtitle: Text(
+          'Ciąża, wypadek lub dawstwo',
+          style: TextStyle(color: Colors.redAccent.withOpacity(0.7)),
+        ),
         value: _isL4FullPaid,
-        activeColor: Colors.red,
+        activeColor: Colors.redAccent,
         onChanged: (val) => setState(() => _isL4FullPaid = val),
       ),
     );
@@ -305,7 +408,6 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
 
   void _handleSave() {
     if (_selectedDay == null) return;
-
     double finalPay = 0;
     double finalTotalHours = 0;
     TimeOfDay finalStart = const TimeOfDay(hour: 0, minute: 0);
@@ -343,20 +445,24 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
       isCompleted: _shiftType == 'work' ? _isCompleted : true,
       type: _shiftType,
     );
-
     Navigator.pop(context, newShift);
   }
 
-  Widget _buildIosCard({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(8),
-      child: child,
-    );
-  }
+  Widget _buildIosCard({required Widget child}) => Container(
+    decoration: BoxDecoration(
+      color: Theme.of(context).cardTheme.color,
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    padding: const EdgeInsets.all(8),
+    child: child,
+  );
 }
 
 class _TimeButton extends StatelessWidget {
@@ -373,25 +479,41 @@ class _TimeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final iconColor = Theme.of(context).colorScheme.primary;
+
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            Icon(icon, color: Theme.of(context).primaryColor),
+            Icon(icon, color: iconColor, size: 28),
             const SizedBox(height: 8),
             Text(
               label,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
+            const SizedBox(height: 4),
             Text(
               time?.format(context) ?? '--:--',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
             ),
           ],
         ),
