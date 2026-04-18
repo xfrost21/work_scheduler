@@ -6,11 +6,11 @@ class WorkShift {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final double totalHours;
-  final double regularHours;
-  final double nightHours;
   final double estimatedPay;
   final bool isCompleted;
-  final String type; // NOWE: 'work' (Praca), 'off' (Wolne), 'sick' (L4)
+  final String type; // 'work', 'off', 'sick'
+  final double overtimeRate;
+  final String notes; // NOWE
 
   WorkShift({
     required this.id,
@@ -18,11 +18,11 @@ class WorkShift {
     required this.startTime,
     required this.endTime,
     required this.totalHours,
-    required this.regularHours,
-    required this.nightHours,
     required this.estimatedPay,
     required this.isCompleted,
     required this.type,
+    this.overtimeRate = 1.0,
+    this.notes = '', // NOWE
   });
 
   Map<String, dynamic> toJson() {
@@ -34,11 +34,11 @@ class WorkShift {
       'endHour': endTime.hour,
       'endMinute': endTime.minute,
       'totalHours': totalHours,
-      'regularHours': regularHours,
-      'nightHours': nightHours,
       'estimatedPay': estimatedPay,
       'isCompleted': isCompleted,
       'type': type,
+      'overtimeRate': overtimeRate,
+      'notes': notes, // NOWE
     };
   }
 
@@ -52,11 +52,11 @@ class WorkShift {
       ),
       endTime: TimeOfDay(hour: json['endHour'], minute: json['endMinute']),
       totalHours: json['totalHours'],
-      regularHours: json['regularHours'],
-      nightHours: json['nightHours'],
       estimatedPay: json['estimatedPay'],
       isCompleted: json['isCompleted'],
-      type: json['type'] ?? 'work', // Ochrona starych danych!
+      type: json['type'] ?? 'work',
+      overtimeRate: (json['overtimeRate'] ?? 1.0).toDouble(),
+      notes: json['notes'] ?? '', // NOWE
     );
   }
 }
