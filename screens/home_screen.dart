@@ -2,55 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/work_shift.dart';
+import '../models/app_settings.dart';
 import 'add_shift_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   List<WorkShift> shifts = [];
+  AppSettings _settings = AppSettings();
   int _selectedIndex = 0;
   DateTime _focusedMonth = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _loadShifts();
+    _loadData();
   }
 
-  void _sortShifts() {
-    shifts.sort((a, b) {
-      int dateCompare = a.date.compareTo(b.date);
-      if (dateCompare != 0) return dateCompare;
-      return a.startTime.hour.compareTo(b.startTime.hour);
-    });
-  }
-
-  Future<void> _loadShifts() async {
+  Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     final String? shiftsString = prefs.getString('my_work_shifts');
     if (shiftsString != null) {
       final List<dynamic> decodedData = jsonDecode(shiftsString);
       setState(() {
         shifts = decodedData.map((item) => WorkShift.fromJson(item)).toList();
-        _sortShifts();
+        shifts.sort((a, b) => a.date.compareTo(b.date));
       });
     }
-  }
-
-  Future<void> _saveShifts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String encodedData = jsonEncode(
-      shifts.map((shift) => shift.toJson()).toList(),
-    );
-    await prefs.setString('my_work_shifts', encodedData);
+    final String? settingsString = prefs.getString('app_settings');
+    if (settingsString != null) {
+      setState(
+        () => _settings = AppSettings.fromJson(jsonDecode(settingsString)),
+      );
+    }
   }
 
   Future<void> _openShiftForm([WorkShift? shiftToEdit]) async {
@@ -61,29 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
         fullscreenDialog: true,
       ),
     );
-
-    if (result != null && result is WorkShift) {
-      setState(() {
-        if (shiftToEdit != null) {
-          int index = shifts.indexWhere((s) => s.id == result.id);
-          if (index != -1) shifts[index] = result;
-        } else {
-          shifts.add(result);
-        }
-        _sortShifts();
-      });
-      _saveShifts();
+    if (result != null) {
+      _loadData();
     }
-  }
-
-  List<WorkShift> _getFilteredShifts() {
-    return shifts
-        .where(
-          (shift) =>
-              shift.date.month == _focusedMonth.month &&
-              shift.date.year == _focusedMonth.year,
-        )
-        .toList();
   }
 
   @override
@@ -105,6 +75,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ? 'Podsumowanie'
               : 'Opcje',
         ),
+        actions: [
+          if (_selectedIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.add, size: 28),
+              onPressed: () => _openShiftForm(),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -114,21 +91,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) {
+          setState(() => _selectedIndex = index);
+          _loadData();
+        },
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
             label: 'Grafik',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.pie_chart_outline),
-            activeIcon: Icon(Icons.pie_chart),
             label: 'Analiza',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
             label: 'Opcje',
           ),
         ],
@@ -136,173 +113,190 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMonthPicker() {
-    final label = DateFormat('MMMM yyyy', 'pl_PL').format(_focusedMonth);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: () => setState(
-              () => _focusedMonth = DateTime(
-                _focusedMonth.year,
-                _focusedMonth.month - 1,
-              ),
-            ),
-          ),
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () => setState(
-              () => _focusedMonth = DateTime(
-                _focusedMonth.year,
-                _focusedMonth.month + 1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildScheduleTab() {
-    final filtered = _getFilteredShifts();
-    if (filtered.isEmpty)
-      return Center(
-        child: Text('Brak wpisów.', style: TextStyle(color: Colors.grey[500])),
-      );
+    final filtered = shifts
+        .where(
+          (s) =>
+              s.date.month == _focusedMonth.month &&
+              s.date.year == _focusedMonth.year,
+        )
+        .toList();
+    double earned = 0;
+    double planned = 0;
+    for (var s in filtered) {
+      if (s.isCompleted || s.type == 'sick')
+        earned += s.estimatedPay;
+      else
+        planned += s.estimatedPay;
+    }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 24),
-      itemCount: filtered.length,
-      itemBuilder: (context, index) {
-        final shift = filtered[index];
-        final dayName = DateFormat('EEEE', 'pl_PL').format(shift.date);
-
-        IconData icon;
-        Color color;
-        String sub = '';
-        Color bg = Theme.of(context).cardTheme.color!;
-
-        if (shift.type == 'off') {
-          icon = Icons.coffee_rounded;
-          color = Colors.blueGrey;
-          sub = 'Wolne';
-        } else if (shift.type == 'sick') {
-          icon = Icons.medical_services_rounded;
-          color = Colors.redAccent;
-          sub = 'L4';
-          bg = Colors.red.withOpacity(0.05);
-        } else {
-          icon = shift.isCompleted
-              ? Icons.check_circle_rounded
-              : Icons.pending_actions_rounded;
-          color = shift.isCompleted ? Colors.green : Colors.orange;
-          sub =
-              '${shift.startTime.format(context)} - ${shift.endTime.format(context)}';
-        }
-
-        // DODAJEMY NOTATKĘ DO OPISU
-        if (shift.notes.isNotEmpty) sub += '\n📝 ${shift.notes}';
-
-        return Dismissible(
-          key: Key(shift.id),
-          direction: DismissDirection.endToStart,
-          onDismissed: (_) {
-            setState(() => shifts.removeWhere((s) => s.id == shift.id));
-            _saveShifts();
-          },
-          child: Card(
-            color: bg,
-            child: ListTile(
-              onTap: () => _openShiftForm(shift),
-              leading: Icon(icon, color: color),
-              title: Text(
-                '${DateFormat('dd.MM').format(shift.date)}, ${dayName[0].toUpperCase()}${dayName.substring(1)}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(sub, style: const TextStyle(height: 1.4)),
-              trailing: Text(
-                '${shift.estimatedPay.toStringAsFixed(2)} zł',
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+    return ListView(
+      children: [
+        if (filtered.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildIosCard(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildMiniStat('ZAROBIONE', earned, Colors.green),
+                    _buildMiniStat('W PLANACH', planned, Colors.orange),
+                    _buildMiniStat(
+                      'ŁĄCZNIE',
+                      earned + planned,
+                      Theme.of(context).textTheme.bodyLarge?.color ??
+                          Colors.black,
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-      },
+        ...filtered.map((s) {
+          final day = DateFormat('dd.MM, EEEE', 'pl_PL').format(s.date);
+          Color color = s.type == 'sick'
+              ? Colors.redAccent
+              : (s.isCompleted ? Colors.green : Colors.orange);
+          if (s.type == 'off') color = Colors.grey;
+
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ListTile(
+              onTap: () => _openShiftForm(s),
+              leading: Icon(
+                s.type == 'work' ? Icons.work : Icons.home,
+                color: color,
+              ),
+              title: Text(
+                day,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                s.type == 'work'
+                    ? '${s.startTime.format(context)} - ${s.endTime.format(context)}'
+                    : 'Wolne',
+              ),
+              trailing: Text(
+                '${s.estimatedPay.toStringAsFixed(2)} zł',
+                style: TextStyle(fontWeight: FontWeight.bold, color: color),
+              ),
+            ),
+          );
+        }).toList(),
+      ],
     );
   }
 
+  Widget _buildMiniStat(String l, double v, Color c) => Column(
+    children: [
+      Text(
+        l,
+        style: const TextStyle(
+          fontSize: 10,
+          color: Colors.grey,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      Text(
+        '${v.toStringAsFixed(0)} zł',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c),
+      ),
+    ],
+  );
+
   Widget _buildSummaryTab() {
-    final filtered = _getFilteredShifts();
+    final filtered = shifts
+        .where(
+          (s) =>
+              s.date.month == _focusedMonth.month &&
+              s.date.year == _focusedMonth.year,
+        )
+        .toList();
     double earned = 0;
-    double planned = 0;
-    int work = 0;
-    int off = 0;
-    int sick = 0;
-    for (var s in filtered) {
-      if (s.type == 'off')
-        off++;
-      else if (s.type == 'sick') {
-        sick++;
-        earned += s.estimatedPay;
-      } else {
-        work++;
-        if (s.isCompleted)
-          earned += s.estimatedPay;
-        else
-          planned += s.estimatedPay;
-      }
-    }
-    final txt = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    for (var s in filtered)
+      if (s.isCompleted || s.type == 'sick') earned += s.estimatedPay;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildIosCard(
-          child: Column(
-            children: [
-              _buildRow(
-                'Zarobione',
-                '${earned.toStringAsFixed(2)} zł',
-                Colors.green,
+        if (_settings.goalTarget > 0) ...[
+          const Text(
+            'POSTĘP CELU',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildIosCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _settings.goalName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${((earned / _settings.goalTarget) * 100).toStringAsFixed(1)}%',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (earned / _settings.goalTarget).clamp(0.0, 1.0),
+                      backgroundColor: Colors.grey.withOpacity(0.2),
+                      color: Colors.green,
+                      minHeight: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Zostało do zarobienia: ${(_settings.goalTarget - earned).clamp(0, double.infinity).toStringAsFixed(2)} zł',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
               ),
-              const Divider(height: 1, indent: 16),
-              _buildRow(
-                'W planach',
-                '${planned.toStringAsFixed(2)} zł',
-                Colors.orange,
-              ),
-              const Divider(height: 1, indent: 16),
-              _buildRow(
-                'Suma',
-                '${(earned + planned).toStringAsFixed(2)} zł',
-                txt,
-                bold: true,
-              ),
-            ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMonthPicker() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: () => setState(
+            () => _focusedMonth = DateTime(
+              _focusedMonth.year,
+              _focusedMonth.month - 1,
+            ),
           ),
         ),
-        const SizedBox(height: 24),
-        _buildIosCard(
-          child: Column(
-            children: [
-              _buildRow('Dni pracy', '$work', txt),
-              const Divider(height: 1, indent: 16),
-              _buildRow('Wolne / L4', '$off / $sick', Colors.blueGrey),
-            ],
+        Text(
+          DateFormat('MMMM yyyy', 'pl_PL').format(_focusedMonth).toUpperCase(),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          onPressed: () => setState(
+            () => _focusedMonth = DateTime(
+              _focusedMonth.year,
+              _focusedMonth.month + 1,
+            ),
           ),
         ),
       ],
@@ -315,21 +309,5 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(12),
     ),
     child: child,
-  );
-  Widget _buildRow(String t, String v, Color c, {bool bold = false}) => Padding(
-    padding: const EdgeInsets.all(16),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(t),
-        Text(
-          v,
-          style: TextStyle(
-            color: c,
-            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ],
-    ),
   );
 }
