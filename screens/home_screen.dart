@@ -25,8 +25,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadData();
   }
 
+  // Wczytywanie danych z pamięci telefonu
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Wczytywanie zmian
     final String? data = prefs.getString('my_work_shifts');
     if (data != null) {
       setState(() {
@@ -36,11 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
         shifts.sort((a, b) => a.date.compareTo(b.date));
       });
     }
+
+    // Wczytywanie ustawień (stawki, etat, cel)
     final String? sData = prefs.getString('app_settings');
-    if (sData != null)
+    if (sData != null) {
       setState(() => _settings = AppSettings.fromJson(jsonDecode(sData)));
+    }
   }
 
+  // Zapisywanie zmian do pamięci
   Future<void> _saveShifts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -49,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Otwieranie formularza dodawania/edycji
   Future<void> _openShiftForm([WorkShift? shiftToEdit]) async {
     final result = await Navigator.push(
       context,
@@ -57,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
         fullscreenDialog: true,
       ),
     );
+
     if (result != null && result is WorkShift) {
       setState(() {
         if (shiftToEdit != null) {
@@ -128,6 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // KARTA: LISTA ZMIAN (GRAFIK)
   Widget _buildScheduleTab() {
     final filtered = shifts
         .where(
@@ -138,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
     double earned = 0;
     double planned = 0;
+
     for (var s in filtered) {
       if (s.isCompleted || s.type == 'sick')
         earned += s.estimatedPay;
@@ -170,10 +181,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ...filtered.map((s) {
+          // Logika kolorów i ikonek
           Color color = s.type == 'sick'
               ? Colors.redAccent
               : (s.isCompleted ? Colors.green : Colors.orange);
           if (s.type == 'off') color = Colors.grey;
+
           return Dismissible(
             key: Key(s.id),
             direction: DismissDirection.endToStart,
@@ -194,7 +207,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: Icon(
                   s.type == 'work'
                       ? (s.isCompleted ? Icons.check_circle : Icons.work)
-                      : Icons.home,
+                      : (s.type == 'sick'
+                            ? Icons.medical_services
+                            : Icons.home), // Ikonka medyczna dla L4
                   color: color,
                 ),
                 title: Text(
@@ -204,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: Text(
                   s.type == 'work'
                       ? '${s.startTime.format(context)} - ${s.endTime.format(context)}'
-                      : 'Wolne',
+                      : (s.type == 'sick' ? 'Chorobowe (L4)' : 'Wolne'),
                 ),
                 trailing: Text(
                   '${s.estimatedPay.toStringAsFixed(2)} zł',
@@ -235,6 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ],
   );
 
+  // KARTA: ANALIZA (PODSUMOWANIE)
   Widget _buildSummaryTab() {
     final filtered = shifts
         .where(
@@ -246,13 +262,16 @@ class _HomeScreenState extends State<HomeScreen> {
     double earned = 0;
     Map<int, double> daily = {};
     double currentHours = 0;
+
     for (var s in filtered) {
       if (s.isCompleted || s.type == 'sick') {
         earned += s.estimatedPay;
-        currentHours += s.totalHours;
+        currentHours += s.totalHours; // Tu wpadają godziny z pracy oraz 8h z L4
         daily[s.date.day] = (daily[s.date.day] ?? 0) + s.estimatedPay;
       }
     }
+
+    // Obliczanie nominału (średnio 168h * etat)
     double nominal = 168.0 * _settings.employmentFte;
 
     return ListView(
@@ -274,6 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _buildBarChart(daily),
           ),
         ),
+
         const SizedBox(height: 24),
         const Text(
           'REALIZACJA ETATU',
@@ -315,14 +335,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 8),
                 Text(
                   currentHours >= nominal
-                      ? 'Nadgodziny!'
-                      : 'Do etatu: ${(nominal - currentHours).toStringAsFixed(1)} h',
+                      ? 'Wymiar wypracowany!'
+                      : 'Do wymiaru: ${(nominal - currentHours).toStringAsFixed(1)} h',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
           ),
         ),
+
         const SizedBox(height: 24),
         if (_settings.goalTarget > 0) ...[
           const Text(
@@ -362,6 +383,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       minHeight: 10,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Zostało do celu: ${(_settings.goalTarget - earned).clamp(0, double.infinity).toStringAsFixed(2)} zł',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                 ],
               ),
             ),
@@ -371,10 +397,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Budowanie wykresu słupkowego zarobków
   Widget _buildBarChart(Map<int, double> data) {
     if (data.isEmpty) return const Center(child: Text('Brak danych'));
     double maxVal = data.values.fold(0, (max, v) => v > max ? v : max);
     int days = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0).day;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -438,6 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ],
   );
+
   Widget _buildIosCard({required Widget child}) => Container(
     decoration: BoxDecoration(
       color: Theme.of(context).cardTheme.color,

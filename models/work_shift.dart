@@ -10,7 +10,8 @@ class WorkShift {
   final bool isCompleted;
   final String type; // 'work', 'off', 'sick'
   final double overtimeRate;
-  final String notes; // NOWE
+  final double sickPayRate; // NOWE: 0.8 lub 1.0
+  final String notes;
 
   WorkShift({
     required this.id,
@@ -22,7 +23,8 @@ class WorkShift {
     required this.isCompleted,
     required this.type,
     this.overtimeRate = 1.0,
-    this.notes = '', // NOWE
+    this.sickPayRate = 0.8,
+    this.notes = '',
   });
 
   Map<String, dynamic> toJson() {
@@ -38,7 +40,8 @@ class WorkShift {
       'isCompleted': isCompleted,
       'type': type,
       'overtimeRate': overtimeRate,
-      'notes': notes, // NOWE
+      'sickPayRate': sickPayRate,
+      'notes': notes,
     };
   }
 
@@ -56,7 +59,8 @@ class WorkShift {
       isCompleted: json['isCompleted'],
       type: json['type'] ?? 'work',
       overtimeRate: (json['overtimeRate'] ?? 1.0).toDouble(),
-      notes: json['notes'] ?? '', // NOWE
+      sickPayRate: (json['sickPayRate'] ?? 0.8).toDouble(),
+      notes: json['notes'] ?? '',
     );
   }
 }

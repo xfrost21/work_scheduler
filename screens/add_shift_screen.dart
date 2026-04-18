@@ -21,6 +21,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
   TimeOfDay? _endTime;
   bool _isCompleted = false;
   String _shiftType = 'work';
+  double _sickPayRate = 0.8; // 80% lub 1.0
   final _notesController = TextEditingController();
   AppSettings _settings = AppSettings();
 
@@ -35,6 +36,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
       _endTime = widget.existingShift!.endTime;
       _isCompleted = widget.existingShift!.isCompleted;
       _shiftType = widget.existingShift!.type;
+      _sickPayRate = widget.existingShift!.sickPayRate;
       _notesController.text = widget.existingShift!.notes;
     } else {
       _focusedDay = DateTime.now();
@@ -50,19 +52,23 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
   }
 
   void _handleSave() {
-    if (_selectedDay == null || _startTime == null || _endTime == null) return;
+    if (_selectedDay == null) return;
+    // POPRAWKA: Jeśli to praca, wymagamy godzin. Dla L4/Wolnego nie.
+    if (_shiftType == 'work' && (_startTime == null || _endTime == null))
+      return;
 
     final temp = WorkShift(
       id:
           widget.existingShift?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       date: _selectedDay!,
-      startTime: _startTime!,
-      endTime: _endTime!,
+      startTime: _startTime ?? const TimeOfDay(hour: 0, minute: 0),
+      endTime: _endTime ?? const TimeOfDay(hour: 0, minute: 0),
       totalHours: 0,
       estimatedPay: 0,
       isCompleted: _isCompleted,
       type: _shiftType,
+      sickPayRate: _sickPayRate,
       notes: _notesController.text,
     );
 
@@ -79,6 +85,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
         estimatedPay: res['pay'],
         isCompleted: _isCompleted,
         type: _shiftType,
+        sickPayRate: _sickPayRate,
         notes: _notesController.text,
       ),
     );
@@ -187,13 +194,45 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                 ),
               ),
             ],
+            if (_shiftType == 'sick') ...[
+              const Text(
+                'STAWKA CHOROBOWEGO',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildCard(
+                child: Column(
+                  children: [
+                    RadioListTile<double>(
+                      title: const Text('80% (Standard)'),
+                      value: 0.8,
+                      groupValue: _sickPayRate,
+                      activeColor: primary,
+                      onChanged: (v) => setState(() => _sickPayRate = v!),
+                    ),
+                    const Divider(height: 1),
+                    RadioListTile<double>(
+                      title: const Text('100% (Wypadek/Ciąża)'),
+                      value: 1.0,
+                      groupValue: _sickPayRate,
+                      activeColor: primary,
+                      onChanged: (v) => setState(() => _sickPayRate = v!),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             _buildCard(
               child: TextField(
                 controller: _notesController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  hintText: 'Notatki (np. sekcja, manager)',
+                  hintText: 'Notatki',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(12),
                 ),

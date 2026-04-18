@@ -54,10 +54,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Funkcja czyszcząca tekst z przecinków na kropki przed parmowaniem
+  // Funkcja zamieniająca przecinek na kropkę, aby uniknąć błędów parmowania
   double _parseInput(String val) =>
       double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
 
+  // Dynamiczny kalkulator netto uwzględniający składki ZUS i zdrowotną
   double _calculateDynamicNet(
     double gross,
     double extra,
@@ -66,9 +67,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool student,
   ) {
     if (type == 'uz' && student && young) return gross + extra;
-    double zus = gross * 0.1371;
-    double health = (gross - zus) * 0.09;
-    double pit = young ? 0 : (gross - zus) * 0.12;
+
+    double zus = gross * 0.1371; // Składki społeczne (13.71%)
+    double health = (gross - zus) * 0.09; // Składka zdrowotna (9%)
+    double pit = young ? 0 : (gross - zus) * 0.12; // PIT 0% dla młodych lub 12%
+
     return double.parse(
       (gross - zus - health - pit + extra).toStringAsFixed(2),
     );
@@ -90,29 +93,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       hourlyRateGross: gross,
       hourlyRateNet: net,
       extraAllowance: extra,
+      useGross: true,
+      averageMonthlyNet: _parseInput(_averageController.text),
+      holidayBonus: _parseInput(_bonusController.text),
       contractType: _contractType,
       employmentFte: _employmentFte,
-      isUnder26: _isUnder26,
-      isStudent: _isStudent,
       isDarkMode: _isDarkMode,
+      isStudent: _isStudent,
+      isUnder26: _isUnder26,
       goalName: _goalNameController.text,
       goalTarget: _parseInput(_goalTargetController.text),
-      holidayBonus: _parseInput(_bonusController.text),
     );
 
     await prefs.setString('app_settings', jsonEncode(settings.toJson()));
-    await _recalculateAllShifts(settings);
+    await _recalculateAllShifts(settings); // Aktualizacja całego grafiku
     themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
 
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Zaktualizowano! Nowa stawka: $net zł'),
+          content: Text('Zapisano! Nowa stawka netto: $net zł'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
   }
 
+  // Moduł rekalkulacji wszystkich zmian w pamięci
   Future<void> _recalculateAllShifts(AppSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString('my_work_shifts');
@@ -131,6 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           isCompleted: s.isCompleted,
           type: s.type,
           notes: s.notes,
+          sickPayRate: s.sickPayRate, // Zachowanie stawki chorobowego (80/100%)
         );
       }).toList();
       await prefs.setString(
@@ -240,6 +248,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 1, indent: 55),
           _buildField('Kwota celu', _goalTargetController, Icons.savings),
         ]),
+        const SizedBox(height: 24),
+        const Text(
+          'WYGLĄD',
+          style: TextStyle(
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildCard([
+          ListTile(
+            leading: Icon(
+              Icons.dark_mode,
+              color: _isDarkMode ? Colors.purple : Colors.orange,
+            ),
+            title: const Text('Tryb Ciemny'),
+            trailing: CupertinoSwitch(
+              value: _isDarkMode,
+              onChanged: (v) {
+                setState(() => _isDarkMode = v);
+                _saveSettings();
+              },
+            ),
+          ),
+        ]),
         const SizedBox(height: 32),
         ElevatedButton(
           onPressed: _saveSettings,
@@ -273,7 +307,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     TextEditingController c,
     IconData i, {
     Color color = Colors.blue,
-    TextInputType kType = const TextInputType.numberWithOptions(decimal: true),
+    TextInputType kType = const TextInputType.numberWithOptions(
+      decimal: true,
+    ), // Poprawka klawiatury
   }) => ListTile(
     leading: Icon(i, color: color),
     title: TextField(

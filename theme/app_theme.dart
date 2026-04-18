@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color iosBlue = Color(
-    0xFF0A84FF,
-  ); // Jaśniejszy błękit dla Dark Mode
+  static const Color iosBlue = Color(0xFF0A84FF);
 
   // --- MOTYW JASNY ---
   static ThemeData get lightTheme {
@@ -17,6 +15,13 @@ class AppTheme {
       ),
       useMaterial3: true,
       textTheme: GoogleFonts.nunitoTextTheme(),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFF2F2F7),
+        foregroundColor: Colors.black,
+        elevation: 0,
+        scrolledUnderElevation: 0, // WYŁĄCZA zmianę koloru przy scrollu
+        surfaceTintColor: Colors.transparent, // Usuwa dodatkowy odcień
+      ),
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0,
@@ -29,17 +34,17 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black, // Prawdziwa czerń OLED
+      scaffoldBackgroundColor: Colors.black,
       colorScheme: ColorScheme.fromSeed(
         brightness: Brightness.dark,
         seedColor: iosBlue,
         primary: iosBlue,
-        surface: const Color(0xFF1C1C1E), // Karty w iOS Dark
+        surface: const Color(0xFF1C1C1E),
       ),
       useMaterial3: true,
       textTheme: GoogleFonts.nunitoTextTheme(ThemeData.dark().textTheme),
       cardTheme: CardThemeData(
-        color: const Color(0xFF1C1C1E), // Tło kafelków
+        color: const Color(0xFF1C1C1E),
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -47,6 +52,9 @@ class AppTheme {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation:
+            0, // WYŁĄCZA zmianę koloru na szary przy scrollu
+        surfaceTintColor: Colors.transparent, // Gwarantuje czyste tło
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: Color(0xFF1C1C1E),
