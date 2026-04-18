@@ -15,16 +15,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _grossController = TextEditingController();
+  final _extraAllowanceController = TextEditingController();
   final _averageController = TextEditingController();
   final _bonusController = TextEditingController();
   final _goalNameController = TextEditingController();
   final _goalTargetController = TextEditingController();
 
   String _contractType = 'uop';
+  double _employmentFte = 0.75;
   bool _isDarkMode = false;
   bool _isStudent = true;
   bool _isUnder26 = true;
-  List<DateTime> _customHolidays = [];
 
   @override
   void initState() {
@@ -39,51 +40,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final s = AppSettings.fromJson(jsonDecode(data));
       setState(() {
         _grossController.text = s.hourlyRateGross.toString();
+        _extraAllowanceController.text = s.extraAllowance.toString();
         _averageController.text = s.averageMonthlyNet.toString();
         _bonusController.text = s.holidayBonus.toString();
         _goalNameController.text = s.goalName;
         _goalTargetController.text = s.goalTarget.toString();
         _contractType = s.contractType;
+        _employmentFte = s.employmentFte;
         _isDarkMode = s.isDarkMode;
         _isStudent = s.isStudent;
         _isUnder26 = s.isUnder26;
-        _customHolidays = s.customHolidays;
       });
     }
   }
 
+  // Funkcja czyszcząca tekst z przecinków na kropki przed parmowaniem
+  double _parseInput(String val) =>
+      double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
+
+  double _calculateDynamicNet(
+    double gross,
+    double extra,
+    String type,
+    bool young,
+    bool student,
+  ) {
+    if (type == 'uz' && student && young) return gross + extra;
+    double zus = gross * 0.1371;
+    double health = (gross - zus) * 0.09;
+    double pit = young ? 0 : (gross - zus) * 0.12;
+    return double.parse(
+      (gross - zus - health - pit + extra).toStringAsFixed(2),
+    );
+  }
+
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    double gross = double.tryParse(_grossController.text) ?? 29.0;
-    // Mnożnik ustawiony pod Twoje 23 zł netto
-    double net = _isUnder26 && _contractType == 'uop'
-        ? gross * 0.7931
-        : gross * 0.71;
-    if (_contractType == 'uz' && _isStudent && _isUnder26) net = gross;
+    double gross = _parseInput(_grossController.text);
+    double extra = _parseInput(_extraAllowanceController.text);
+    double net = _calculateDynamicNet(
+      gross,
+      extra,
+      _contractType,
+      _isUnder26,
+      _isStudent,
+    );
 
     final settings = AppSettings(
       hourlyRateGross: gross,
       hourlyRateNet: net,
-      useGross: true,
-      averageMonthlyNet: double.tryParse(_averageController.text) ?? 4500.0,
-      holidayBonus: double.tryParse(_bonusController.text) ?? 4.0,
+      extraAllowance: extra,
       contractType: _contractType,
-      isDarkMode: _isDarkMode,
-      isStudent: _isStudent,
+      employmentFte: _employmentFte,
       isUnder26: _isUnder26,
-      customHolidays: _customHolidays,
+      isStudent: _isStudent,
+      isDarkMode: _isDarkMode,
       goalName: _goalNameController.text,
-      goalTarget: double.tryParse(_goalTargetController.text) ?? 0.0,
+      goalTarget: _parseInput(_goalTargetController.text),
+      holidayBonus: _parseInput(_bonusController.text),
     );
 
     await prefs.setString('app_settings', jsonEncode(settings.toJson()));
-    await _recalculateAllShifts(settings); // Automatyczna aktualizacja kwot
+    await _recalculateAllShifts(settings);
     themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
 
     if (mounted)
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Zapisano! Grafik został przeliczony.'),
+        SnackBar(
+          content: Text('Zaktualizowano! Nowa stawka: $net zł'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -155,6 +179,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (v) => setState(() => _contractType = v!),
             ),
           ),
+          const Divider(height: 1, indent: 16),
+          ListTile(
+            title: const Text('Wymiar Etatu'),
+            trailing: DropdownButton<double>(
+              value: _employmentFte,
+              underline: const SizedBox(),
+              items: const [
+                DropdownMenuItem(value: 1.0, child: Text('Pełny (1/1)')),
+                DropdownMenuItem(value: 0.75, child: Text('3/4 etatu')),
+                DropdownMenuItem(value: 0.5, child: Text('1/2 etatu')),
+              ],
+              onChanged: (v) => setState(() => _employmentFte = v!),
+            ),
+          ),
         ]),
         const SizedBox(height: 24),
         const Text(
@@ -168,6 +206,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         _buildCard([
           _buildField('Stawka Brutto', _grossController, Icons.payments),
+          const Divider(height: 1, indent: 55),
+          _buildField(
+            'Dodatki (np. pranie zł/h)',
+            _extraAllowanceController,
+            Icons.wash,
+          ),
           const Divider(height: 1, indent: 55),
           _buildField(
             'Dodatek świąteczny',
@@ -187,35 +231,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         _buildCard([
-          _buildField('Nazwa celu', _goalNameController, Icons.flag),
+          _buildField(
+            'Nazwa celu',
+            _goalNameController,
+            Icons.flag,
+            kType: TextInputType.text,
+          ),
           const Divider(height: 1, indent: 55),
           _buildField('Kwota celu', _goalTargetController, Icons.savings),
-        ]),
-        const SizedBox(height: 24),
-        const Text(
-          'WYGLĄD',
-          style: TextStyle(
-            color: Colors.grey,
-            fontWeight: FontWeight.bold,
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildCard([
-          ListTile(
-            leading: Icon(
-              Icons.dark_mode,
-              color: _isDarkMode ? Colors.purple : Colors.orange,
-            ),
-            title: const Text('Tryb Ciemny'),
-            trailing: CupertinoSwitch(
-              value: _isDarkMode,
-              onChanged: (v) {
-                setState(() => _isDarkMode = v);
-                _saveSettings();
-              },
-            ),
-          ),
         ]),
         const SizedBox(height: 32),
         ElevatedButton(
@@ -244,17 +267,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
     child: Column(children: c),
   );
+
   Widget _buildField(
     String l,
     TextEditingController c,
     IconData i, {
     Color color = Colors.blue,
+    TextInputType kType = const TextInputType.numberWithOptions(decimal: true),
   }) => ListTile(
     leading: Icon(i, color: color),
     title: TextField(
       controller: c,
       decoration: InputDecoration(labelText: l, border: InputBorder.none),
-      keyboardType: TextInputType.number,
+      keyboardType: kType,
     ),
   );
 }

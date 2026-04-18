@@ -138,7 +138,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (_shiftType == 'work')
+            if (_shiftType == 'work') ...[
               Row(
                 children: [
                   Expanded(
@@ -150,8 +150,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                         var t = await showTimePicker(
                           context: context,
                           initialTime:
-                              _startTime ??
-                              const TimeOfDay(hour: 8, minute: 0), // POPRAWIONE
+                              _startTime ?? const TimeOfDay(hour: 8, minute: 0),
                         );
                         if (t != null) setState(() => _startTime = t);
                       },
@@ -167,11 +166,7 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                         var t = await showTimePicker(
                           context: context,
                           initialTime:
-                              _endTime ??
-                              const TimeOfDay(
-                                hour: 16,
-                                minute: 0,
-                              ), // POPRAWIONE
+                              _endTime ?? const TimeOfDay(hour: 16, minute: 0),
                         );
                         if (t != null) setState(() => _endTime = t);
                       },
@@ -179,6 +174,19 @@ class _AddShiftScreenState extends State<AddShiftScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
+              _buildCard(
+                child: SwitchListTile(
+                  title: const Text(
+                    'Zrealizowana',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  value: _isCompleted,
+                  activeColor: primary,
+                  onChanged: (val) => setState(() => _isCompleted = val),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             _buildCard(
               child: TextField(

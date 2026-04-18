@@ -8,7 +8,6 @@ class ShiftCalculator {
       (d) => d.year == day.year && d.month == day.month && d.day == day.day,
     );
     if (isCompanyHoliday) return true;
-
     final fixedHolidays = [
       [1, 1],
       [6, 1],
@@ -23,7 +22,6 @@ class ShiftCalculator {
     for (var h in fixedHolidays) {
       if (day.day == h[0] && day.month == h[1]) return true;
     }
-
     int y = day.year;
     int a = y % 19;
     int b = y ~/ 100;
@@ -40,31 +38,21 @@ class ShiftCalculator {
     int month = (h + l - 7 * m + 114) ~/ 31;
     int dDay = ((h + l - 7 * m + 114) % 31) + 1;
     DateTime easter = DateTime(y, month, dDay);
-
     return (day.year == easter.year &&
             day.month == easter.month &&
             day.day == easter.day) ||
         (day.year == easter.year &&
             day.month == easter.month &&
-            day.day == easter.add(const Duration(days: 1)).day) ||
-        (day.year == easter.year &&
-            day.month == easter.add(const Duration(days: 49)).month &&
-            day.day == easter.add(const Duration(days: 49)).day) ||
-        (day.year == easter.year &&
-            day.month == easter.add(const Duration(days: 60)).month &&
-            day.day == easter.add(const Duration(days: 60)).day);
+            day.day == easter.add(const Duration(days: 1)).day);
   }
 
   static Map<String, dynamic> calculatePay(
     WorkShift shift,
     AppSettings settings,
   ) {
-    if (shift.type == 'sick') {
-      double pay = (settings.averageMonthlyNet / 30.0) * 0.8;
-      return {'pay': pay, 'total': 0.0};
-    }
+    if (shift.type == 'sick')
+      return {'pay': (settings.averageMonthlyNet / 30.0) * 0.8, 'total': 0.0};
     if (shift.type == 'off') return {'pay': 0.0, 'total': 0.0};
-
     DateTime startDT = DateTime(
       shift.date.year,
       shift.date.month,
@@ -81,13 +69,11 @@ class ShiftCalculator {
     );
     if (endDT.isBefore(startDT) || endDT.isAtSameMomentAs(startDT))
       endDT = endDT.add(const Duration(days: 1));
-
     int totalMinutes = endDT.difference(startDT).inMinutes;
     int mReg = 0;
     int mNight = 0;
     int mHReg = 0;
     int mHNight = 0;
-
     for (int i = 0; i < totalMinutes; i++) {
       DateTime cur = startDT.add(Duration(minutes: i));
       bool isH = isHoliday(cur, settings);
@@ -101,7 +87,6 @@ class ShiftCalculator {
       else
         mReg++;
     }
-
     int bLeft = 15;
     if (totalMinutes > bLeft) {
       int s = (mReg >= bLeft) ? bLeft : mReg;
@@ -117,13 +102,7 @@ class ShiftCalculator {
         mNight -= s;
         bLeft -= s;
       }
-      if (bLeft > 0) {
-        s = (mHNight >= bLeft) ? bLeft : mHNight;
-        mHNight -= s;
-        bLeft -= s;
-      }
     }
-
     double r = settings.hourlyRateNet;
     double b = settings.holidayBonus;
     return {

@@ -1,16 +1,16 @@
 class AppSettings {
-  double hourlyRateNet; // Wyliczona stawka netto
-  double hourlyRateGross; // Stawka brutto z umowy
-  bool useGross; // Czy liczyć z brutto?
-  bool isStudent; // Status studenta
-  bool isUnder26; // Ulga dla młodych
+  double hourlyRateNet;
+  double hourlyRateGross;
+  bool useGross;
+  bool isStudent;
+  bool isUnder26;
   double averageMonthlyNet;
-  String contractType; // 'uop' lub 'uz'
+  String contractType;
+  double employmentFte; // 1.0, 0.75, 0.5
+  double extraAllowance; // Np. 0.23 na pranie
   bool isDarkMode;
   double holidayBonus;
   List<DateTime> customHolidays;
-
-  // Cele finansowe
   String goalName;
   double goalTarget;
 
@@ -21,7 +21,9 @@ class AppSettings {
     this.isStudent = true,
     this.isUnder26 = true,
     this.averageMonthlyNet = 4500.0,
-    this.contractType = 'uz',
+    this.contractType = 'uop',
+    this.employmentFte = 0.75,
+    this.extraAllowance = 0.0,
     this.isDarkMode = false,
     this.holidayBonus = 4.0,
     List<DateTime>? customHolidays,
@@ -37,6 +39,8 @@ class AppSettings {
     'isUnder26': isUnder26,
     'averageMonthlyNet': averageMonthlyNet,
     'contractType': contractType,
+    'employmentFte': employmentFte,
+    'extraAllowance': extraAllowance,
     'isDarkMode': isDarkMode,
     'holidayBonus': holidayBonus,
     'customHolidays': customHolidays.map((e) => e.toIso8601String()).toList(),
@@ -51,7 +55,9 @@ class AppSettings {
     isStudent: json['isStudent'] ?? true,
     isUnder26: json['isUnder26'] ?? true,
     averageMonthlyNet: (json['averageMonthlyNet'] ?? 4500.0).toDouble(),
-    contractType: json['contractType'] ?? 'uz',
+    contractType: json['contractType'] ?? 'uop',
+    employmentFte: (json['employmentFte'] ?? 0.75).toDouble(),
+    extraAllowance: (json['extraAllowance'] ?? 0.0).toDouble(),
     isDarkMode: json['isDarkMode'] ?? false,
     holidayBonus: (json['holidayBonus'] ?? 4.0).toDouble(),
     customHolidays:
